@@ -1,0 +1,465 @@
+{
+  "metadata" : {
+    "name" : "Ham-Or-Spam",
+    "user_save_timestamp" : "1970-01-01T01:00:00.000Z",
+    "auto_save_timestamp" : "1970-01-01T01:00:00.000Z",
+    "language_info" : {
+      "name" : "scala",
+      "file_extension" : "scala",
+      "codemirror_mode" : "text/x-scala"
+    },
+    "trusted" : true,
+    "customLocalRepo" : "/tmp/spark-notebook/",
+    "customRepos" : null,
+    "customDeps" : [ ],
+    "customImports" : null,
+    "customArgs" : null,
+    "customSparkConf" : {
+      "spark.ext.h2o.repl.enabled" : "false"
+    }
+  },
+  "cells" : [ {
+    "metadata" : {
+      "id" : "198122F6B3A241A982080002D26B656A"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Intro:\n\nThis example is the Ham-Or-Spam demo [1] of H2O Sparkling-water that is integrated into the spark-notebook.\n\nPlease note that this code was tested with Scala [2.11.8] and Spark [2.0.2] \n\n*[1] https://github.com/h2oai/sparkling-water/blob/master/examples/scripts/hamOrSpam.script.scala\n\n"
+  }, {
+    "metadata" : {
+      "id" : "3966259B50EF4691B2CA413B55DE669E"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Dependencies :\n\nImports the H2O (sparkling-water) depencies that we need.  Note that these dependencies comes with many of the spark dependencies as well, so in order to avoid conflict, we need to remove some of these friend dependencies."
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "presentation" : {
+        "tabs_state" : "{\n  \"tab_id\": \"#tab1991724125-0\"\n}",
+        "pivot_chart_state" : "{\n  \"hiddenAttributes\": [],\n  \"menuLimit\": 200,\n  \"cols\": [],\n  \"rows\": [],\n  \"vals\": [],\n  \"exclusions\": {},\n  \"inclusions\": {},\n  \"unusedAttrsVertical\": 85,\n  \"autoSortUnusedAttrs\": false,\n  \"inclusionsInfo\": {},\n  \"aggregatorName\": \"Count\",\n  \"rendererName\": \"Table\"\n}"
+      },
+      "id" : "11739ACDD2114B7682D7DD4AA07A056B"
+    },
+    "cell_type" : "code",
+    "source" : ":dp\n    ai.h2o % sparkling-water-core_2.11 % 2.0.2\n    - org.apache.hadoop % hadoop-client %   _\n    - org.apache.spark  % spark-core_2.11    %   _\n    - org.apache.spark % spark-mllib_2.11 % _\n    - org.apache.spark % spark-repl_2.11 % _\n    - org.scala-lang    %     _         %   _\n    - org.scoverage     %     _         %   _\n    - org.eclipse.jetty.aggregate % jetty-servlet % _",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "globalScope.jars: Array[String] = [Ljava.lang.String;@18c08b01\nres2: List[String] = List(/tmp/spark-notebook/org/apache/avro/avro/1.8.0/avro-1.8.0.jar, /tmp/spark-notebook/org/apache/spark/spark-catalyst_2.11/2.0.1/spark-catalyst_2.11-2.0.1.jar, /tmp/spark-notebook/com/google/code/gson/gson/2.3.1/gson-2.3.1.jar, /tmp/spark-notebook/org/eclipse/jetty/orbit/javax.transaction/1.1.1.v201105210645/javax.transaction-1.1.1.v201105210645.jar, /tmp/spark-notebook/org/apache/spark/spark-sql_2.11/2.0.1/spark-sql_2.11-2.0.1.jar, /tmp/spark-notebook/org/eclipse/jetty/orbit/javax.activation/1.1.0.v201105071233/javax.activation-1.1.0.v201105071233.jar, /tmp/spark-notebook/org/apache/parquet/parquet-hadoop/1.7.0/parquet-hadoop-1.7.0.jar, /tmp/spark-notebook/com/google/guava/guava/16.0.1/guava-16.0.1.ja..."
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : "<div>\n      <script data-this=\"{&quot;dataId&quot;:&quot;anon7fa872ee2a2b0ca0eb8f24f2a51dd5a1&quot;,&quot;dataInit&quot;:[],&quot;genId&quot;:&quot;1991724125&quot;}\" type=\"text/x-scoped-javascript\">/*<![CDATA[*/req(['../javascripts/notebook/playground','../javascripts/notebook/magic/tabs'], \n      function(playground, _magictabs) {\n        // data ==> data-this (in observable.js's scopedEval) ==> this in JS => { dataId, dataInit, ... }\n        // this ==> scope (in observable.js's scopedEval) ==> this.parentElement ==> div.container below (toHtml)\n\n        playground.call(data,\n                        this\n                        ,\n                        {\n    \"f\": _magictabs,\n    \"o\": {}\n  }\n  \n                        \n                        \n                      );\n      }\n    );/*]]>*/</script>\n    <div>\n      <div>\n        <ul class=\"nav nav-tabs\" id=\"ul1991724125\"><li>\n              <a href=\"#tab1991724125-0\"><i class=\"fa fa-table\"/></a>\n            </li><li>\n              <a href=\"#tab1991724125-1\"><i class=\"fa fa-cubes\"/></a>\n            </li></ul>\n\n        <div class=\"tab-content\" id=\"tab1991724125\"><div class=\"tab-pane\" id=\"tab1991724125-0\">\n            <div>\n      <script data-this=\"{&quot;dataId&quot;:&quot;anon8c1d9469bc349eec2f8dc70fd00f43c4&quot;,&quot;dataInit&quot;:[{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/avro/avro/1.8.0/avro-1.8.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/spark/spark-catalyst_2.11/2.0.1/spark-catalyst_2.11-2.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/google/code/gson/gson/2.3.1/gson-2.3.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.transaction/1.1.1.v201105210645/javax.transaction-1.1.1.v201105210645.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/spark/spark-sql_2.11/2.0.1/spark-sql_2.11-2.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.activation/1.1.0.v201105071233/javax.activation-1.1.0.v201105071233.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-hadoop/1.7.0/parquet-hadoop-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/google/guava/guava/16.0.1/guava-16.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-jackson/1.7.0/parquet-jackson-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/tukaani/xz/1.5/xz-1.5.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/amazonaws/aws-java-sdk-kms/1.10.47/aws-java-sdk-kms-1.10.47.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-common/1.7.0/parquet-common-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-server/8.1.17.v20150415/jetty-server-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-codec/commons-codec/1.3/commons-codec-1.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/univocity/univocity-parsers/2.1.1/univocity-parsers-2.1.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/directory/studio/org.apache.commons.lang/2.6/org.apache.commons.lang-2.6.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-xml/8.1.17.v20150415/jetty-xml-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-webapp/8.1.17.v20150415/jetty-webapp-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/joda-time/joda-time/2.3/joda-time-2.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/codehaus/janino/janino/2.7.8/janino-2.7.8.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/net/java/dev/jets3t/jets3t/0.6.1/jets3t-0.6.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-algos/3.10.0.10/h2o-algos-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/github/rwl/jtransforms/2.4.0/jtransforms-2.4.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/google-analytics-java/1.1.2-H2O-CUSTOM/google-analytics-java-1.1.2-H2O-CUSTOM.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/sparkling-water-core_2.11/2.0.2/sparkling-water-core_2.11-2.0.2.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-io/commons-io/2.4/commons-io-2.4.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-genmodel/3.10.0.10/h2o-genmodel-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/httpcomponents/httpcore/4.3.3/httpcore-4.3.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/joda/joda-convert/1.7/joda-convert-1.7.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/commons/commons-compress/1.8.1/commons-compress-1.8.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/deepwater-backend-api/1.0.2/deepwater-backend-api-1.0.2.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/amazonaws/aws-java-sdk-s3/1.10.47/aws-java-sdk-s3-1.10.47.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-util/8.1.17.v20150415/jetty-util-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.servlet/3.0.0.v201112011016/javax.servlet-3.0.0.v201112011016.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-http/8.1.17.v20150415/jetty-http-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/spark/spark-sketch_2.11/2.0.1/spark-sketch_2.11-2.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-continuation/8.1.17.v20150415/jetty-continuation-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.mail.glassfish/1.4.1.v201005082020/javax.mail.glassfish-1.4.1.v201005082020.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/net/sf/opencsv/opencsv/2.3/opencsv-2.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-lang/commons-lang/2.6/commons-lang-2.6.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-column/1.7.0/parquet-column-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/codehaus/janino/commons-compiler/2.7.8/commons-compiler-2.7.8.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-logging/commons-logging/1.1.1/commons-logging-1.1.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/amazonaws/aws-java-sdk-core/1.10.47/aws-java-sdk-core-1.10.47.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-encoding/1.7.0/parquet-encoding-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-scala_2.11/3.10.0.10/h2o-scala_2.11-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/thoughtworks/paranamer/paranamer/2.7/paranamer-2.7.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-persist-s3/3.10.0.10/h2o-persist-s3-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-io/8.1.17.v20150415/jetty-io-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-jndi/8.1.17.v20150415/jetty-jndi-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/gov/nist/math/jama/1.0.3/jama-1.0.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-generator/1.7.0/parquet-generator-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-plus/8.1.17.v20150415/jetty-plus-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-core/3.10.0.10/h2o-core-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/sparkling-water-repl_2.11/2.0.2/sparkling-water-repl_2.11-2.0.2.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/httpcomponents/httpclient/4.3.6/httpclient-4.3.6.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-app/3.10.0.10/h2o-app-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/github/tony19/named-regexp/0.2.3/named-regexp-0.2.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/reflections/0.9.11-h2o-custom/reflections-0.9.11-h2o-custom.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/antlr/antlr4-runtime/4.5.3/antlr4-runtime-4.5.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-web/3.10.0.10/h2o-web-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-avro-parser/3.10.0.10/h2o-avro-parser-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-servlet/8.1.17.v20150415/jetty-servlet-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-httpclient/commons-httpclient/3.1/commons-httpclient-3.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/javassist/javassist/3.18.2-GA/javassist-3.18.2-GA.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-format/2.3.0-incubating/parquet-format-2.3.0-incubating.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-persist-hdfs/3.10.0.10/h2o-persist-hdfs-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-security/8.1.17.v20150415/jetty-security-8.1.17.v20150415.jar&quot;}],&quot;genId&quot;:&quot;407848032&quot;}\" type=\"text/x-scoped-javascript\">/*<![CDATA[*/req(['../javascripts/notebook/playground','../javascripts/notebook/magic/tableChart'], \n      function(playground, _magictableChart) {\n        // data ==> data-this (in observable.js's scopedEval) ==> this in JS => { dataId, dataInit, ... }\n        // this ==> scope (in observable.js's scopedEval) ==> this.parentElement ==> div.container below (toHtml)\n\n        playground.call(data,\n                        this\n                        ,\n                        {\n    \"f\": _magictableChart,\n    \"o\": {\"headers\":[\"string value\"],\"width\":600,\"height\":400}\n  }\n  \n                        \n                        \n                      );\n      }\n    );/*]]>*/</script>\n    <div>\n      <span class=\"chart-total-item-count\"><p data-bind=\"text: value\"><script data-this=\"{&quot;valueId&quot;:&quot;anon4aa68cfd487e63508c91ae3553ef2800&quot;,&quot;initialValue&quot;:&quot;68&quot;}\" type=\"text/x-scoped-javascript\">/*<![CDATA[*/\nreq(\n['observable', 'knockout'],\nfunction (O, ko) {\n  ko.applyBindings({\n      value: O.makeObservable(valueId, initialValue)\n    },\n    this\n  );\n});\n        /*]]>*/</script></p> entries total</span>\n      <span class=\"chart-sampling-warning\"><p data-bind=\"text: value\"><script data-this=\"{&quot;valueId&quot;:&quot;anon6aa1d6dc2ab4317fd319d3ff6eb33812&quot;,&quot;initialValue&quot;:&quot;&quot;}\" type=\"text/x-scoped-javascript\">/*<![CDATA[*/\nreq(\n['observable', 'knockout'],\nfunction (O, ko) {\n  ko.applyBindings({\n      value: O.makeObservable(valueId, initialValue)\n    },\n    this\n  );\n});\n        /*]]>*/</script></p></span>\n      <div>\n      </div>\n    </div></div>\n            </div><div class=\"tab-pane\" id=\"tab1991724125-1\">\n            <div>\n      <script data-this=\"{&quot;dataId&quot;:&quot;anon06f77178334a3ab9b1d6760cca3c6f5b&quot;,&quot;dataInit&quot;:[{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/avro/avro/1.8.0/avro-1.8.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/spark/spark-catalyst_2.11/2.0.1/spark-catalyst_2.11-2.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/google/code/gson/gson/2.3.1/gson-2.3.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.transaction/1.1.1.v201105210645/javax.transaction-1.1.1.v201105210645.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/spark/spark-sql_2.11/2.0.1/spark-sql_2.11-2.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.activation/1.1.0.v201105071233/javax.activation-1.1.0.v201105071233.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-hadoop/1.7.0/parquet-hadoop-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/google/guava/guava/16.0.1/guava-16.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-jackson/1.7.0/parquet-jackson-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/tukaani/xz/1.5/xz-1.5.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/amazonaws/aws-java-sdk-kms/1.10.47/aws-java-sdk-kms-1.10.47.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-common/1.7.0/parquet-common-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-server/8.1.17.v20150415/jetty-server-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-codec/commons-codec/1.3/commons-codec-1.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/univocity/univocity-parsers/2.1.1/univocity-parsers-2.1.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/directory/studio/org.apache.commons.lang/2.6/org.apache.commons.lang-2.6.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-xml/8.1.17.v20150415/jetty-xml-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-webapp/8.1.17.v20150415/jetty-webapp-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/joda-time/joda-time/2.3/joda-time-2.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/codehaus/janino/janino/2.7.8/janino-2.7.8.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/net/java/dev/jets3t/jets3t/0.6.1/jets3t-0.6.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-algos/3.10.0.10/h2o-algos-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/github/rwl/jtransforms/2.4.0/jtransforms-2.4.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/google-analytics-java/1.1.2-H2O-CUSTOM/google-analytics-java-1.1.2-H2O-CUSTOM.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/sparkling-water-core_2.11/2.0.2/sparkling-water-core_2.11-2.0.2.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-io/commons-io/2.4/commons-io-2.4.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-genmodel/3.10.0.10/h2o-genmodel-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/httpcomponents/httpcore/4.3.3/httpcore-4.3.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/joda/joda-convert/1.7/joda-convert-1.7.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/commons/commons-compress/1.8.1/commons-compress-1.8.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/deepwater-backend-api/1.0.2/deepwater-backend-api-1.0.2.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/amazonaws/aws-java-sdk-s3/1.10.47/aws-java-sdk-s3-1.10.47.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-util/8.1.17.v20150415/jetty-util-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.servlet/3.0.0.v201112011016/javax.servlet-3.0.0.v201112011016.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-http/8.1.17.v20150415/jetty-http-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/spark/spark-sketch_2.11/2.0.1/spark-sketch_2.11-2.0.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-continuation/8.1.17.v20150415/jetty-continuation-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/orbit/javax.mail.glassfish/1.4.1.v201005082020/javax.mail.glassfish-1.4.1.v201005082020.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/net/sf/opencsv/opencsv/2.3/opencsv-2.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-lang/commons-lang/2.6/commons-lang-2.6.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-column/1.7.0/parquet-column-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/codehaus/janino/commons-compiler/2.7.8/commons-compiler-2.7.8.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-logging/commons-logging/1.1.1/commons-logging-1.1.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/amazonaws/aws-java-sdk-core/1.10.47/aws-java-sdk-core-1.10.47.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-encoding/1.7.0/parquet-encoding-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-scala_2.11/3.10.0.10/h2o-scala_2.11-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/thoughtworks/paranamer/paranamer/2.7/paranamer-2.7.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-persist-s3/3.10.0.10/h2o-persist-s3-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-io/8.1.17.v20150415/jetty-io-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-jndi/8.1.17.v20150415/jetty-jndi-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/gov/nist/math/jama/1.0.3/jama-1.0.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-generator/1.7.0/parquet-generator-1.7.0.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-plus/8.1.17.v20150415/jetty-plus-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-core/3.10.0.10/h2o-core-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/sparkling-water-repl_2.11/2.0.2/sparkling-water-repl_2.11-2.0.2.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/httpcomponents/httpclient/4.3.6/httpclient-4.3.6.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-app/3.10.0.10/h2o-app-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/com/github/tony19/named-regexp/0.2.3/named-regexp-0.2.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/reflections/0.9.11-h2o-custom/reflections-0.9.11-h2o-custom.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/antlr/antlr4-runtime/4.5.3/antlr4-runtime-4.5.3.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-web/3.10.0.10/h2o-web-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-avro-parser/3.10.0.10/h2o-avro-parser-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-servlet/8.1.17.v20150415/jetty-servlet-8.1.17.v20150415.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/commons-httpclient/commons-httpclient/3.1/commons-httpclient-3.1.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/javassist/javassist/3.18.2-GA/javassist-3.18.2-GA.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/apache/parquet/parquet-format/2.3.0-incubating/parquet-format-2.3.0-incubating.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/ai/h2o/h2o-persist-hdfs/3.10.0.10/h2o-persist-hdfs-3.10.0.10.jar&quot;},{&quot;string value&quot;:&quot;/tmp/spark-notebook/org/eclipse/jetty/jetty-security/8.1.17.v20150415/jetty-security-8.1.17.v20150415.jar&quot;}],&quot;genId&quot;:&quot;1774354278&quot;}\" type=\"text/x-scoped-javascript\">/*<![CDATA[*/req(['../javascripts/notebook/playground','../javascripts/notebook/magic/pivotChart'], \n      function(playground, _magicpivotChart) {\n        // data ==> data-this (in observable.js's scopedEval) ==> this in JS => { dataId, dataInit, ... }\n        // this ==> scope (in observable.js's scopedEval) ==> this.parentElement ==> div.container below (toHtml)\n\n        playground.call(data,\n                        this\n                        ,\n                        {\n    \"f\": _magicpivotChart,\n    \"o\": {\"width\":600,\"height\":400,\"derivedAttributes\":{},\"extraOptions\":{}}\n  }\n  \n                        \n                        \n                      );\n      }\n    );/*]]>*/</script>\n    <div>\n      <span class=\"chart-total-item-count\"><p data-bind=\"text: value\"><script data-this=\"{&quot;valueId&quot;:&quot;anonf620712840278f764357b93b3442cb5f&quot;,&quot;initialValue&quot;:&quot;68&quot;}\" type=\"text/x-scoped-javascript\">/*<![CDATA[*/\nreq(\n['observable', 'knockout'],\nfunction (O, ko) {\n  ko.applyBindings({\n      value: O.makeObservable(valueId, initialValue)\n    },\n    this\n  );\n});\n        /*]]>*/</script></p> entries total</span>\n      <span class=\"chart-sampling-warning\"><p data-bind=\"text: value\"><script data-this=\"{&quot;valueId&quot;:&quot;anon773cf53c6231a55eab29a4aa3bd117c8&quot;,&quot;initialValue&quot;:&quot;&quot;}\" type=\"text/x-scoped-javascript\">/*<![CDATA[*/\nreq(\n['observable', 'knockout'],\nfunction (O, ko) {\n  ko.applyBindings({\n      value: O.makeObservable(valueId, initialValue)\n    },\n    this\n  );\n});\n        /*]]>*/</script></p></span>\n      <div>\n      </div>\n    </div></div>\n            </div></div>\n      </div>\n    </div></div>"
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 1,
+      "time" : "Took: 947 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "89F386D1C65042B685A228E7CF864C16"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Imports:\nImports the H2O packages that we will need"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "81801871B6944F66825FA8792B4F0F1D"
+    },
+    "cell_type" : "code",
+    "source" : "import _root_.hex.deeplearning.DeepLearningModel\nimport _root_.hex.ModelMetricsBinomial\nimport org.apache.spark.h2o._\nimport org.apache.spark.{SparkFiles, mllib}\nimport org.apache.spark.mllib.feature.{IDFModel, IDF, HashingTF}\nimport org.apache.spark.rdd.RDD\nimport org.apache.spark.sql.{SQLContext, DataFrame}\nimport water.Key\nimport water.support.{H2OFrameSupport, SparkContextSupport, ModelMetricsSupport}",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "import _root_.hex.deeplearning.DeepLearningModel\nimport _root_.hex.ModelMetricsBinomial\nimport org.apache.spark.h2o._\nimport org.apache.spark.{SparkFiles, mllib}\nimport org.apache.spark.mllib.feature.{IDFModel, IDF, HashingTF}\nimport org.apache.spark.rdd.RDD\nimport org.apache.spark.sql.{SQLContext, DataFrame}\nimport water.Key\nimport water.support.{H2OFrameSupport, SparkContextSupport, ModelMetricsSupport}\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 2,
+      "time" : "Took: 508 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "04B9375445D542DA802578AC2BBF7F46"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Define helper classes and functions:\n\n- SMS class: to hold features and target for a message\n- load function: to load the file from the internet and split each lines based on tabulation  (the target is first element, rest of the message is the second element)\n- tokenize function: to convert a message into a meaningful list of words\n- buildIDFModel function: to build a Term frequency-inverse document frequency (TF-IDF) model --> More details on http://spark.apache.org/docs/latest/mllib-feature-extraction.html\n- buildDLModel function: to build a DeepLearning (MLP) model --> Mode details on http://docs.h2o.ai/h2o/latest-stable/h2o-docs/data-science/deep-learning.html"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "A5BB6013600D4E2E840741F929B56B64"
+    },
+    "cell_type" : "code",
+    "source" : "case class SMS(target: String, fv: org.apache.spark.mllib.linalg.Vector)",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "defined class SMS\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 3,
+      "time" : "Took: 495 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "1DF60356B3B849C697337FF06295EF6F"
+    },
+    "cell_type" : "code",
+    "source" : "def load(dataFile: String): RDD[Array[String]] = {\n  val data = scala.io.Source.fromURL(dataFile)(\"ISO-8859-1\").getLines.toList \n  sc.parallelize(data).cache.map(l => l.split(\"\\t\")).filter(r => !r(0).isEmpty)\n}",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "load: (dataFile: String)org.apache.spark.rdd.RDD[Array[String]]\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 4,
+      "time" : "Took: 621 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "presentation" : {
+        "tabs_state" : "{\n  \"tab_id\": \"#tab933241435-0\"\n}",
+        "pivot_chart_state" : "{\n  \"hiddenAttributes\": [],\n  \"menuLimit\": 200,\n  \"cols\": [],\n  \"rows\": [],\n  \"vals\": [],\n  \"exclusions\": {},\n  \"inclusions\": {},\n  \"unusedAttrsVertical\": 85,\n  \"autoSortUnusedAttrs\": false,\n  \"inclusionsInfo\": {},\n  \"aggregatorName\": \"Count\",\n  \"rendererName\": \"Table\"\n}"
+      },
+      "id" : "D2356DEA6DF944D3AF92D159FFF43EFD"
+    },
+    "cell_type" : "code",
+    "source" : "def tokenize(data: RDD[String]): RDD[Seq[String]] = {\n  val ignoredWords = Seq(\"the\", \"a\", \"\", \"in\", \"on\", \"at\", \"as\", \"not\", \"for\")\n  val ignoredChars = Seq(',', ':', ';', '/', '<', '>', '\"', '.', '(', ')', '?', '-', '\\'','!','0', '1')\n\n  val texts = data.map( r=> {\n    var smsText = r.toLowerCase\n    for( c <- ignoredChars) {\n      smsText = smsText.replace(c, ' ')\n    }\n\n    val words =smsText.split(\" \").filter(w => !ignoredWords.contains(w) && w.length>2).distinct\n    words.toSeq\n  })\n  texts\n}",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "tokenize: (data: org.apache.spark.rdd.RDD[String])org.apache.spark.rdd.RDD[Seq[String]]\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 5,
+      "time" : "Took: 466 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "9F96CA65D2554DC9B180B01752DF7217"
+    },
+    "cell_type" : "code",
+    "source" : "def buildIDFModel(tokens: RDD[Seq[String]], minDocFreq:Int = 4, hashSpaceSize:Int = 1 << 10): (HashingTF, IDFModel, RDD[mllib.linalg.Vector]) = {\n  // Hash strings into the given space\n  val hashingTF = new HashingTF(hashSpaceSize)\n  val tf = hashingTF.transform(tokens)\n  // Build term frequency-inverse document frequency\n  val idfModel = new IDF(minDocFreq = minDocFreq).fit(tf)\n  val expandedText = idfModel.transform(tf)\n  (hashingTF, idfModel, expandedText)\n}",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "buildIDFModel: (tokens: org.apache.spark.rdd.RDD[Seq[String]], minDocFreq: Int, hashSpaceSize: Int)(org.apache.spark.mllib.feature.HashingTF, org.apache.spark.mllib.feature.IDFModel, org.apache.spark.rdd.RDD[org.apache.spark.mllib.linalg.Vector])\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 6,
+      "time" : "Took: 448 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "F9A2063B386D41F589935176F3C166C9"
+    },
+    "cell_type" : "code",
+    "source" : "def buildDLModel(train: Frame, valid: Frame, epochs: Int = 10, l1: Double = 0.001, l2: Double = 0.0, hidden: Array[Int] = Array[Int](200, 200)) (implicit h2oContext: H2OContext): DeepLearningModel = {\n  import h2oContext.implicits._\n  // Build a model\n  import _root_.hex.deeplearning.DeepLearning\n  import _root_.hex.deeplearning.DeepLearningModel.DeepLearningParameters\n  val dlParams = new DeepLearningParameters()\n  dlParams._train = train\n  dlParams._valid = valid\n  dlParams._response_column = \"target\"\n  dlParams._epochs = epochs\n  dlParams._l1 = l1\n  dlParams._hidden = hidden\n\n  // Create a job\n  val dl = new DeepLearning(dlParams, Key.make(\"dlModel.hex\"))\n  dl.trainModel.get\n}",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "buildDLModel: (train: org.apache.spark.h2o.Frame, valid: org.apache.spark.h2o.Frame, epochs: Int, l1: Double, l2: Double, hidden: Array[Int])(implicit h2oContext: org.apache.spark.h2o.H2OContext)hex.deeplearning.DeepLearningModel\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 7,
+      "time" : "Took: 610 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "B072D172D2714FFE8EF7537CC972E67E"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Ready to start\n\nWe are done with definiting all helper functions, and we can now proceed with the code that will actually do the job.\n\nWe define the session, sqlContext and H2O Context"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "EC1174A8E0244A959C9F26D93EDC4B4E"
+    },
+    "cell_type" : "code",
+    "source" : "//handle to the spark Session\nval spark = SparkSession.builder().getOrCreate()\n\n// Create SQL support\nimplicit val sqlContext = spark.sqlContext\nimport sqlContext.implicits._\n\n// Start H2O services\nimport org.apache.spark.h2o._\nimplicit val h2oContext = H2OContext.getOrCreate(sc)\nimport h2oContext.implicits._",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "spark: org.apache.spark.sql.SparkSession = org.apache.spark.sql.SparkSession@19e7939f\nsqlContext: org.apache.spark.sql.SQLContext = org.apache.spark.sql.SQLContext@27feef99\nimport sqlContext.implicits._\nimport org.apache.spark.h2o._\nh2oContext: org.apache.spark.h2o.H2OContext =\n\nSparkling Water Context:\n * H2O name: sparkling-water-loicus_-564160527\n * cluster size: 1\n * list of used nodes:\n  (executorId, host, port)\n  ------------------------\n  (driver,localhost,54323)\n  ------------------------\n\n  Open H2O Flow in browser: http://127.0.0.1:54323 (CMD + click in Mac OSX)\n\nimport h2oContext.implicits._\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 8,
+      "time" : "Took: 5 seconds 542 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "690BA04FBF754A85826F997E9F1943E5"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Prepare the data"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "09DF3A0D27A340E58F58228A6AA2C8C9"
+    },
+    "cell_type" : "code",
+    "source" : "//val data = load(\"smsData.txt\")\nval data = load(\"https://raw.githubusercontent.com/h2oai/sparkling-water/master/examples/smalldata/smsData.txt\")\nval hamSpam = data.map( r => r(0)) //spam or ham\nval message = data.map( r => r(1)) //message as string\nval tokens = tokenize(message) //message as word tokens",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "data: org.apache.spark.rdd.RDD[Array[String]] = MapPartitionsRDD[6] at filter at <console>:80\nhamSpam: org.apache.spark.rdd.RDD[String] = MapPartitionsRDD[7] at map at <console>:97\nmessage: org.apache.spark.rdd.RDD[String] = MapPartitionsRDD[8] at map at <console>:98\ntokens: org.apache.spark.rdd.RDD[Seq[String]] = MapPartitionsRDD[9] at map at <console>:82\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 9,
+      "time" : "Took: 1 second 763 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "18941E29DA854ABE8A340A69BD68BD94"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Build the TF-IDF model\n\nThis requires to loop on the data to fit the model (can take sometime for larger datasets)."
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "32CEC15AA5294EC6B77B88F0057A589A"
+    },
+    "cell_type" : "code",
+    "source" : "var (hashingTF, idfModel, tfidf) = buildIDFModel(tokens,hashSpaceSize=1 << 10)",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "hashingTF: org.apache.spark.mllib.feature.HashingTF = org.apache.spark.mllib.feature.HashingTF@77b2b1eb\nidfModel: org.apache.spark.mllib.feature.IDFModel = org.apache.spark.mllib.feature.IDFModel@1f68a374\ntfidf: org.apache.spark.rdd.RDD[org.apache.spark.mllib.linalg.Vector] = MapPartitionsRDD[15] at mapPartitions at IDF.scala:178\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 10,
+      "time" : "Took: 869 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "B6CEC56EAE1B4975B94FCE6B8C4B4E6F"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Build the H2O Frame\n- Merge back target with TF-IDF extracted vectors\n- Convert the RDD to a spark dataframe\n- Convert the spark dataframe to a H2OFrame\n- Turn the target string to a categorical vector"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "presentation" : {
+        "tabs_state" : "{\n  \"tab_id\": \"#tab1100579153-0\"\n}",
+        "pivot_chart_state" : "{\n  \"hiddenAttributes\": [],\n  \"menuLimit\": 200,\n  \"cols\": [],\n  \"rows\": [],\n  \"vals\": [],\n  \"exclusions\": {},\n  \"inclusions\": {},\n  \"unusedAttrsVertical\": 85,\n  \"autoSortUnusedAttrs\": false,\n  \"inclusionsInfo\": {},\n  \"aggregatorName\": \"Count\",\n  \"rendererName\": \"Table\"\n}"
+      },
+      "id" : "A9FB524E480F4B26B2DAEBD0FA186451"
+    },
+    "cell_type" : "code",
+    "source" : "\nval resultRDD: DataFrame = hamSpam.zip(tfidf).map(v => SMS(v._1, v._2)).toDF\nval table:H2OFrame = resultRDD\ntable.replace(table.find(\"target\"), table.vec(\"target\").toCategoricalVec).remove()  // Transform target column into a categorical vector",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "resultRDD: org.apache.spark.sql.DataFrame = [target: string, fv: vector]\ntable: org.apache.spark.h2o.H2OFrame =\nFrame key: frame_rdd_21\n   cols: 1025\n   rows: 1324\n chunks: 8\n   size: 760448\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 11,
+      "time" : "Took: 2 seconds 682 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "40CD84CD6CEA404280B3832EC2E13FFB"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Create train/validation datasets\nThe table is split into a training (80%) and a validation (20%) dataset.  \n\nWe are all done with the H2OFrame table, so we can release it."
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "96D56F68E4124C7AAF2123F1E03484DF"
+    },
+    "cell_type" : "code",
+    "source" : "\nval keys = Array[String](\"train.hex\", \"valid.hex\")\nval ratios = Array[Double](0.8)\nval frs = H2OFrameSupport.split(table, keys, ratios)\nval (train, valid) = (frs(0), frs(1))\ntable.delete()",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "keys: Array[String] = Array(train.hex, valid.hex)\nratios: Array[Double] = Array(0.8)\nfrs: Array[water.fvec.Frame] =\nArray(Frame key: train.hex\n   cols: 1025\n   rows: 1059\n chunks: 7\n   size: 658019\n, Frame key: valid.hex\n   cols: 1025\n   rows: 265\n chunks: 2\n   size: 183192\n)\ntrain: water.fvec.Frame =\nFrame key: train.hex\n   cols: 1025\n   rows: 1059\n chunks: 7\n   size: 658019\n\nvalid: water.fvec.Frame =\nFrame key: valid.hex\n   cols: 1025\n   rows: 265\n chunks: 2\n   size: 183192\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 12,
+      "time" : "Took: 945 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "BEF3B70C8BC342079474CBD16B90D42D"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Build the deeplearning model\n\nThe model is trained to predict the target based on the TF-IDF Feature vector.  The model has 2 hidden layers of 200 neurons each.\nIt is trained on 10 epochs and uses a L1 regularization.\n\nWarning:  This step can take some time on a large dataset."
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "3B4C279024554282ABE4E785EE41B477"
+    },
+    "cell_type" : "code",
+    "source" : "val epochs: Int = 10\nval l1: Double = 0.001\nval l2: Double = 0.0\nval hidden: Array[Int] = Array[Int](200, 200) \n\nval dlModel = buildDLModel(train, valid, epochs, l1, l2, hidden)",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "epochs: Int = 10\nl1: Double = 0.001\nl2: Double = 0.0\nhidden: Array[Int] = Array(200, 200)\ndlModel: hex.deeplearning.DeepLearningModel =\nModel Metrics Type: Binomial\n Description: Metrics reported on full training frame\n model id: dlModel.hex\n frame id: train.hex\n MSE: 0.004366137\n RMSE: 0.066076756\n AUC: 0.99994326\n logloss: 0.017004592\n mean_per_class_error: 0.0018726592\n default threshold: 0.8418402671813965\n CM: Confusion Matrix (vertical: actual; across: predicted):\n        ham  spam   Error       Rate\n   ham  792     0  0.0000    0 / 792\n  spam    1   266  0.0037    1 / 267\nTotals  793   266  0.0009  1 / 1,059\nGains/Lift Table (Avg response rate: 25.21 %):\n  Group  Cumulative Data Fraction  Lower Threshold      Lift  Cumulative Lift  Response Rate  Cumulative Response Rate  Capture..."
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 13,
+      "time" : "Took: 6 seconds 343 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "3031CCAFE1C94F0A8799D7207117DA29"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Collect model metrics and evaluate model quality"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "3A95D72FC9CF42608DAA6C66450967EC"
+    },
+    "cell_type" : "code",
+    "source" : "val trainMetrics = ModelMetricsSupport.modelMetrics[ModelMetricsBinomial](dlModel, train)\nval validMetrics = ModelMetricsSupport.modelMetrics[ModelMetricsBinomial](dlModel, valid)\nprintln(\"Training AUC: \" + trainMetrics.auc)\nprintln(\"Validation AUC: \" + validMetrics.auc)",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "Training AUC: 0.9999432527522415\nValidation AUC: 0.9837229437229438\ntrainMetrics: hex.ModelMetricsBinomial =\nModel Metrics Type: Binomial\n Description: N/A\n model id: dlModel.hex\n frame id: train.hex\n MSE: 0.004366137\n RMSE: 0.066076756\n AUC: 0.99994326\n logloss: 0.017004592\n mean_per_class_error: 0.0018726592\n default threshold: 0.8418402671813965\n CM: Confusion Matrix (vertical: actual; across: predicted):\n        ham  spam   Error       Rate\n   ham  792     0  0.0000    0 / 792\n  spam    1   266  0.0037    1 / 267\nTotals  793   266  0.0009  1 / 1,059\nGains/Lift Table (Avg response rate: 25.21 %):\n  Group  Cumulative Data Fraction  Lower Threshold      Lift  Cumulative Lift  Response Rate  Cumulative Response Rate  Capture Rate  Cumulative Capture Rate         Gain  Cumulative Gain\n      1                0.01038716         1.000000  3.966292         3..."
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 14,
+      "time" : "Took: 688 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "F395E1CEA057418F8D6427D2E8B47E99"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Spark Detector\n\nThe model is trained and we can now use it to identify (unlabelled) spam messages.\nWe create an helper function isSpam to to the job.\n"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "25BE891D8F2047A1BB0C9B2822AD06A4"
+    },
+    "cell_type" : "code",
+    "source" : "// Spam detector\ndef isSpam(msg: String, dlModel: DeepLearningModel, hashingTF: HashingTF, idfModel: IDFModel, h2oContext: H2OContext, hamThreshold: Double = 0.5):Boolean = {\n  val msgRdd = sc.parallelize(Seq(msg))\n  val msgVector: DataFrame = idfModel.transform( hashingTF.transform (tokenize (msgRdd))).map(v => SMS(\"?\", v)).toDF\n  val msgTable: H2OFrame = h2oContext.asH2OFrame(msgVector)\n  msgTable.remove(0) // remove first column\n  val prediction = dlModel.score(msgTable)\n  prediction.vecs()(1).at(0) < hamThreshold\n}",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "isSpam: (msg: String, dlModel: hex.deeplearning.DeepLearningModel, hashingTF: org.apache.spark.mllib.feature.HashingTF, idfModel: org.apache.spark.mllib.feature.IDFModel, h2oContext: org.apache.spark.h2o.H2OContext, hamThreshold: Double)Boolean\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 15,
+      "time" : "Took: 544 milliseconds, at 2017-1-1 8:8"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "B14183D4C725470988868D711E68820E"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Testing the detector on new messages"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "E3B91343558547CFBD867251115F0016"
+    },
+    "cell_type" : "code",
+    "source" : "//pass each messages through the spam detector\nArray[String](\n  \"Michal, h2oworld party tonight in MV?\",\n  \"We tried to contact you re your reply to our offer of a Video Handset? 750 anytime any networks mins? UNLIMITED TEXT?\"\n).foreach( sms => \n  println(\"Spam=%5b <--> Message='%s'\".format(isSpam(sms, dlModel, hashingTF, idfModel, h2oContext), sms ) )\n)",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "Spam=false <--> Message='Michal, h2oworld party tonight in MV?'\nSpam= true <--> Message='We tried to contact you re your reply to our offer of a Video Handset? 750 anytime any networks mins? UNLIMITED TEXT?'\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 16,
+      "time" : "Took: 913 milliseconds, at 2017-1-1 8:8"
+    } ]
+  } ],
+  "nbformat" : 4
+}
