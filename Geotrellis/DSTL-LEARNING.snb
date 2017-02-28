@@ -1,0 +1,551 @@
+{
+  "metadata" : {
+    "id" : "66ab3c2c-5705-4141-b9d7-e8a352893de2",
+    "name" : "DSTL-LEARNING",
+    "user_save_timestamp" : "1970-01-01T01:00:00.000Z",
+    "auto_save_timestamp" : "1970-01-01T01:00:00.000Z",
+    "language_info" : {
+      "name" : "scala",
+      "file_extension" : "scala",
+      "codemirror_mode" : "text/x-scala"
+    },
+    "trusted" : true,
+    "sparkNotebook" : null,
+    "customLocalRepo" : "/tmp/spark-notebook",
+    "customRepos" : [ "osgeo % default % http://download.osgeo.org/webdav/geotools/ % maven" ],
+    "customDeps" : [ "org.locationtech.geotrellis % geotrellis-spark_2.11 % 1.0.0", "org.locationtech.geotrellis % geotrellis-geotools_2.11 % 1.0.0", "org.locationtech.geotrellis % geotrellis-shapefile_2.11 % 1.0.0", "org.locationtech.geotrellis % geotrellis-raster_2.11 % 1.0.0", "ai.h2o % sparkling-water-core_2.11 % 2.0.3", "- org.apache.hadoop % hadoop-client %   _", "- org.apache.spark  % spark-core_2.11    %   _", "- org.apache.spark % spark-mllib_2.11 % _", "- org.apache.spark % spark-repl_2.11 % _", "- org.scala-lang    %     _         %   _", "- org.scoverage     %     _         %   _", "- org.eclipse.jetty.aggregate % jetty-servlet % _" ],
+    "customImports" : null,
+    "customArgs" : [ "-Xmx48g" ],
+    "customSparkConf" : {
+      "spark.ext.h2o.repl.enabled" : "false",
+      "spark.ext.h2o.port.base" : 54321,
+      "spark.app.name" : "Notebook",
+      "spark.master" : "local[7]",
+      "spark.driver.memory" : "48G",
+      "spark.executor.memory" : "48G"
+    },
+    "customVars" : null
+  },
+  "cells" : [ {
+    "metadata" : {
+      "id" : "67B5353960134AD28DA39F79194649AE"
+    },
+    "cell_type" : "markdown",
+    "source" : "## Exploring the Kaggle/DSTL Satellite dataset with Geotrellis, Sparkling-Water and the Spark-Notebook (1/2)\n\n### Summary of the Kaggle competition and data \n\nThe full description is available [here](https://www.kaggle.com/c/dstl-satellite-imagery-feature-detection/data).\n\nDSTL provides 1km x 1km satellite images in both 3-band and 16-band formats. The images are coming from the WorldView 3 satellite sensor. All images are in GeoTiff format.\nThe goal of the competition is to detect and classify the types of objects found in these regions. \nThe available data that we are going to use are :\n\n- three_band: The 3-band images are the traditional RGB natural color images.\n   - R: The 3 RGB natural bands has a 11-bits/pixel resolution with a 0.31m spatial resolution.\n- sixteen-band: The 16-band images contain spectral information by capturing wider wavelength channels. This multi-band imagery is taken from the multispectral (400 – 1040nm) and short-wave infrared (SWIR) (1195-2365nm) range. \n   - P: The 1 Panchromatic band (450-800 nm) has a 11-bits/pixel resolution with a 0.31m spatial resolution.\n   - M: The 8 Multispectral bands (red, red edge, coastal, blue, green, yellow, near-IR1 and near-IR2) from 400 nm to 1040 nm has a 11-bits/pixel resolution with a 1.24m spatial resolution.\n   - A: The 8 SWIR bands (1195 - 2365nm) has a 14-bits/pixel resolution with a 7.5m spatial resolution.\n- grid_sizes.csv: the sizes of grids for all the images\n- train_geojson: the geojson format of the 25 training labels.  Each of the 10 class types (see bellow), is described in the form of Polygons and MultiPolygons, which are simply a list of polygons:\n   - Buildings - large building, residential, non-residential, fuel storage facility, fortified building\n   - Misc. Manmade structures \n   - Road \n   - Track - poor/dirt/cart track, footpath/trail\n   - Trees - woodland, hedgerows, groups of trees, standalone trees\n   - Crops - contour ploughing/cropland, grain (wheat) crops, row (potatoes, turnips) crops\n   - Waterway \n   - Standing water\n   - Vehicle Large - large vehicle (e.g. lorry, truck,bus), logistics vehicle\n   - Vehicle Small - small vehicle (car, van), motorbike\n\nIn total they are 450 images.  For 25 of these we have training labels.\n\n### Geotrellis in a nutshell\n\nGeoTrellis is a geographic data processing engine for high performance GIS applications.  Among other things, it provides:\n - data types for working with rasters in the Scala language, as well as fast reading and writing of these data types to disk (local, S3, HDFS and more).\n - number of functions to convert rasterize polygons and vectorize raster images\n - a number of operations to manipulate raster data, including cropping/warping, Map Algebra operations, and rendering operations, as well as vector to raster operations such as Kernel Density and vectorization of raster data.\n \n\n### H2O Sparkling-Water  in a nutshell\n\nH2O is an open source artificial intelligence platform, that makes it possible for anyone to easily apply machine learning and predictive analytics to solve today’s most challenging business problems.  Sparkling-Water is an H2O product combine the fast, scalable machine learning algorithms of H2O with the efficient distributed computing capabilities of Spark.\n\n### Spark-Notebook  in a nutshell\n\nThe Spark-Notebook is the open source notebook aimed at enterprise environments, providing Data Scientist and Data Engineers with an interactive web-based editor that can combine Scala code, SQL queries, Markup and JavaScript in a collaborative manner to explore, analyse and learn from massive data sets.\n"
+  }, {
+    "metadata" : {
+      "id" : "5C3B6C652A1E4A6F85CCEF993A26A0FD"
+    },
+    "cell_type" : "markdown",
+    "source" : "## Introduction\n\nIn this notebook, we will explore the images of the Kaggle/DSTL training dataset\n- Load geoJson data and broadcast them to spark executors\n- Load geoTiff images into a spark RDD\n- Combine several geoTiff objects one container\n- Convert geotrellis integer tiles into double format tiles\n- Resize geotrellis tiles\n- Display geotrellis tiles in the Spark-Notebook\n- Rasterize polygons into \"mask\" tiles\n- Build and display spectral histograms from geotrellis tiles\n- Use sparkling-water to train an H2O machine learning classification algorithm on pixel data\n- Evaluate trained model AUC using sparkling-water\n"
+  }, {
+    "metadata" : {
+      "id" : "FADF66D33BE04E26AAE3B869A6F0A464"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Define Spark-Notebook widget for Geotrellis visualization\n\n - We define a set of helper functions to render geotrellis object (tile, multiband tiles, etc) into Spark-Notebook widget\n - expand the hidden cell bellow if you are curious about how we did this."
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : true,
+      "collapsed" : false,
+      "id" : "733E468FC80143F28B158C477EDE167C"
+    },
+    "cell_type" : "code",
+    "source" : "object TileDisplayer{// extends Serializable {  \n\nimport java.awt.image.BufferedImage \nimport java.io.ByteArrayOutputStream\nimport java.io.ByteArrayInputStream\nimport javax.imageio.ImageIO\nimport play.api.libs.json.JsString\n\nimport geotrellis.raster.io.geotiff._\nimport geotrellis.raster._\nimport geotrellis.raster.render._\nimport geotrellis.raster.resample._\nimport geotrellis.vector._\n\n\ndef showImages(pngs:List[Png], headers:List[String]=Nil, nCols:Int=4, scale:Double=1.0) = {  \n  import play.api.libs.json.JsString\n  val WidthFrac = (100.0*scale).toString+\"%\"\n  val headersB = if(headers!=Nil){headers}else{pngs.zipWithIndex.map{ a=> \"Image \"+a._2}}\n  val imgs:Seq[Widget] = pngs.zip(headersB).map{ case(png,header) =>\n    val JsString(b64) = imageCodec(\"png\").decode( ImageIO.read( new ByteArrayInputStream(png.bytes) ) )\n    val widget:Widget = <center><div><font color=\"DarkBlue\"><h2>{header}</h2></font></div><div><img src={b64}  width={WidthFrac}/></div></center>\n    widget\n  }.toSeq\n  table(nCols, imgs)  \n}\n\n\ndef prepareTile(tile:Tile, scale:Double=1.0, imgWidth:Int=0, func:(Int)=>Int=null):Png = {\n  val rescaled = if(imgWidth<=0){tile}else{tile.resample(new Extent(0,0,tile.cols, tile.rows), imgWidth, (tile.rows*(imgWidth.toDouble/tile.cols)).toInt, Bilinear)}\n  val modified = if(func!=null){ rescaled.map{ func } }else{ rescaled }\n  val converted = if(!modified.cellType.isFloatingPoint){modified}else{modified.mapDouble(_*255).convert(IntConstantNoDataCellType)}    \n  ArrayMultibandTile(converted, converted, converted).renderPng    \n}\n\ndef prepareMultiTile(tile:ArrayMultibandTile, scale:Double=1.0, imgWidth:Int=0, func:(Int)=>Int=null):Png = {\n  val rescaled = if(imgWidth<=0){tile}else{tile.resample(new Extent(0,0,tile.cols, tile.rows), imgWidth, (tile.rows*(imgWidth.toDouble/tile.cols)).toInt, Bilinear)}\n  val modified = if(func!=null){ rescaled.map{ (b:Int,p:Int)=>func(p) } }else{ rescaled }\n  val converted = if(!modified.cellType.isFloatingPoint){modified}else{modified.mapDouble((b:Int,p:Double)=>p*255).convert(IntConstantNoDataCellType)}    \n  converted.renderPng\n}  \n\ndef process(picture:Any, nCols:Int=4, scale:Double=1.0, imgWidth:Int=0, isRGB:Boolean=false, func:(Int)=>Int=null):List[(Png,String)] = {\n  val picList:List[Any] = picture match {\n    case list:List[_]      => list\n    case _                 => List( (picture, \"\") )      \n  }\n\n  val picCaptionList:List[(Any,String)] = picList.map{ _ match {   \n    case pair:(_,_)   => (pair._1, pair._2.toString)\n    case one:Any      => (one, \"\")\n    case _            => throw new RuntimeException(s\"unsupported type\")      \n  }}\n\n  val tileCaptionList:List[(Any,String)] = picCaptionList.flatMap{ case(pic,caption) =>\n    pic match {\n      case mbgt:MultibandGeoTiff =>     mbgt.tile.bands.zipWithIndex.map(a=> (a._1, caption+\" band \"+a._2) ).toList\n      case mt:ArrayMultibandTile => if(!isRGB) mt.bands.zipWithIndex.map(a=> (a._1, caption+\" band \"+a._2) ).toList\n                                    else   List( (mt,caption) )                                                             \n      case st:SinglebandGeoTiff  =>        List( (st.tile,caption) )\n      case _                     =>        List( (pic,caption) )\n    }\n  }\n\n  val pngsCaptions:List[(Png,String)] = tileCaptionList.map{ case(pic,caption) =>\n    val png = pic match {\n      case mt:ArrayMultibandTile => prepareMultiTile(mt,  scale, imgWidth, func)\n      case st:Tile               => prepareTile(st     ,  scale, imgWidth, func)\n      case _                     => throw new RuntimeException(s\"unsupported type!  Must be a tile or multiTile\")      \n    }\n    (png,caption)\n  }\n  pngsCaptions\n}\n\ndef draw(picture:Any, nCols:Int=4, scale:Double=1.0, imgWidth:Int=0, isRGB:Boolean=false, func:(Int)=>Int=null):Widget = {\n  val pngsHeaders = process(picture, nCols, scale, imgWidth, isRGB, func)\n  val widget:Widget = showImages( pngsHeaders.map(_._1), pngsHeaders.map(_._2), nCols=nCols, scale=scale )\n  widget\n//  \"Display is Disabled\"\n}   \n\n}\n",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "defined object TileDisplayer\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 4,
+      "time" : "Took: 1 second 67 milliseconds, at 2017-2-27 12:11"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "18CF22FF8B2B446E9857BAAFA22F405E"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Imports\n\nWe import all we need to :\n- load the data on HDFS\n- run spark\n- run geotrellis"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "557F4BDAEEA3426297E4D8D962CBE0B8"
+    },
+    "cell_type" : "code",
+    "source" : "import org.apache.hadoop.conf.Configuration;\nimport org.apache.hadoop.fs.FileSystem;\nimport org.apache.hadoop.fs.Path;\nimport org.apache.hadoop.fs.{FileSystem, Path, LocatedFileStatus, RemoteIterator}\n\nimport org.apache.spark.deploy.SparkHadoopUtil\nimport org.apache.spark.SparkContext\nimport org.apache.spark.SparkContext._\nimport org.apache.spark.SparkConf\nimport org.apache.spark.storage.StorageLevel\n\nimport java.nio.ByteBuffer\nimport geotrellis.spark._\nimport geotrellis.spark.io._\nimport geotrellis.spark.io.hadoop._\nimport geotrellis.spark.io.hadoop.formats._\n\nimport geotrellis.raster.io.geotiff.reader.GeoTiffReader\nimport geotrellis.raster.io.geotiff._\nimport geotrellis.raster._\nimport geotrellis.raster.render._\nimport geotrellis.raster.resample._\nimport geotrellis.raster.resample.ResampleMethod._\nimport geotrellis.raster.mapalgebra.focal._\nimport geotrellis.raster.rasterize.polygon.PolygonRasterizer\nimport geotrellis.raster.rasterize\nimport geotrellis.raster.rasterize._\n\nimport geotrellis.vector.io._\nimport geotrellis.vector.io.json._\nimport geotrellis.vector._",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "import org.apache.hadoop.conf.Configuration\nimport org.apache.hadoop.fs.FileSystem\nimport org.apache.hadoop.fs.Path\nimport org.apache.hadoop.fs.{FileSystem, Path, LocatedFileStatus, RemoteIterator}\nimport org.apache.spark.deploy.SparkHadoopUtil\nimport org.apache.spark.SparkContext\nimport org.apache.spark.SparkContext._\nimport org.apache.spark.SparkConf\nimport org.apache.spark.storage.StorageLevel\nimport java.nio.ByteBuffer\nimport geotrellis.spark._\nimport geotrellis.spark.io._\nimport geotrellis.spark.io.hadoop._\nimport geotrellis.spark.io.hadoop.formats._\nimport geotrellis.raster.io.geotiff.reader.GeoTiffReader\nimport geotrellis.raster.io.geotiff._\nimport geotrellis.raster._\nimport geotrellis.raster.render._\nimport geotrellis.raster.resample._\nimport geotrellis.raster.resample.ResampleM..."
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 5,
+      "time" : "Took: 826 milliseconds, at 2017-2-27 12:11"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "93C1D13D773046E7BFE540449376318D"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Helper functions for object class types\n\n- define a function to translate a json file name to a specific class type index\n- define a function to translate a class type index into a class name\n"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : false,
+      "id" : "88D0E221AF5F4E5A885605A52044E5EC"
+    },
+    "cell_type" : "code",
+    "source" : "def JsonToClassType = Map(\n\"001_MM_L2_LARGE_BUILDING.geojson\" -> 1,\n\"001_MM_L3_NON_RESIDENTIAL_BUILDING.geojson\" -> 1,\n\"001_MM_L3_RESIDENTIAL_BUILDING.geojson\" -> 1,\n\"001_MM_L5_MISC_SMALL_STRUCTURE.geojson\" -> 2,\n\"002_TR_L3_GOOD_ROADS.geojson\" -> 3,\n\"002_TR_L4_POOR_DIRT_CART_TRACK.geojson\" -> 4,\n\"002_TR_L6_FOOTPATH_TRAIL.geojson\" -> 4,\n\"003_VH_L4_LARGE_VEHICLE.geojson\" -> 9,\n\"003_VH_L5_SMALL_VEHICLE.geojson\" -> 10,\n\"003_VH_L6_MOTORBIKE.geojson\" -> 10,\n\"006_VEG_L2_WOODLAND.geojson\" -> 5,\n\"006_VEG_L3_HEDGEROWS.geojson\" -> 5,\n\"006_VEG_L5_GROUP_TREES.geojson\" -> 5,\n\"006_VEG_L5_STANDALONE_TREES.geojson\" -> 5,\n\"007_AGR_L2_CONTOUR_PLOUGHING_CROPLAND.geojson\" -> 6,\n\"007_AGR_L6_ROW_CROP.geojson\" -> 6,\n\"008_WTR_L2_STANDING_WATER.geojson\" -> 8,\n\"008_WTR_L3_WATERWAY.geojson\" -> 7\n)\n\ndef ClassTypeToName = Map(\n  0 -> \" Raw\", //note the white space to make it comes first\n  1 -> \"Buildings\",\n  2 -> \"Manmade\",\n  3 -> \"Road\",\n  4 -> \"Track\",\n  5 -> \"Trees\",\n  6 -> \"Crops\",\n  7 -> \"Waterway\",\n  8 -> \"Standing Water\",\n  9 -> \"Large Vehicles\",\n 10 -> \"Small Vehicles\"\n)",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "JsonToClassType: scala.collection.immutable.Map[String,Int]\nClassTypeToName: scala.collection.immutable.Map[Int,String]\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 6,
+      "time" : "Took: 925 milliseconds, at 2017-2-27 12:11"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "1089730C172F455DB575A2E6143FD884"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Helper function to move/translate a geotrellis tile by an X,Y pixel offset"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : false,
+      "id" : "3216CA26D7E04E5BB87121E4DB8FEB5C"
+    },
+    "cell_type" : "code",
+    "source" : "def translateTile(tile:Tile, offset:(Int,Int)):Tile = {\n  if(offset._1==0 && offset._2==0){\n    tile\n  }else{\n    val toReturn = tile.mutable.copy\n    for( c <- 0 until toReturn.cols){\n      for( r <- 0 until toReturn.rows){\n        val co = math.max(0,math.min(tile.cols-1, c+offset._1))\n        val ro = math.max(0,math.min(tile.rows-1, r+offset._2))\n        toReturn.mutable.setDouble(c,r, tile.getDouble(co,ro))\n      }\n    }\n    toReturn\n  }\n}",
+    "outputs" : [ {
+      "name" : "stdout",
+      "output_type" : "stream",
+      "text" : "translateTile: (tile: geotrellis.raster.Tile, offset: (Int, Int))geotrellis.raster.Tile\n"
+    }, {
+      "metadata" : { },
+      "data" : {
+        "text/html" : ""
+      },
+      "output_type" : "execute_result",
+      "execution_count" : 7,
+      "time" : "Took: 955 milliseconds, at 2017-2-27 12:11"
+    } ]
+  }, {
+    "metadata" : {
+      "id" : "B6F1506AA5624EC1B2C03CA963292150"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Helper function to load gridExtents, GeoJSONs, and find geoTiffs\n\n- Base dir containing grid-extent and geojson kaggle data  (update it according to your data location)\n- Loaded gridExtents are broadcasted\n- Geojsons are converted in polygons and broadcasted"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "presentation" : {
+        "tabs_state" : "{\n  \"tab_id\": \"#tab2009211452-0\"\n}",
+        "pivot_chart_state" : "{\n  \"hiddenAttributes\": [],\n  \"menuLimit\": 200,\n  \"cols\": [],\n  \"rows\": [],\n  \"vals\": [],\n  \"exclusions\": {},\n  \"inclusions\": {},\n  \"unusedAttrsVertical\": 85,\n  \"autoSortUnusedAttrs\": false,\n  \"inclusionsInfo\": {},\n  \"aggregatorName\": \"Count\",\n  \"rendererName\": \"Table\"\n}"
+      },
+      "id" : "00B8D652C17B4058917A8FF458213E70"
+    },
+    "cell_type" : "code",
+    "source" : "def baseDir = \"/home/loicus/Data/Code/17_01_Kaggle_Sat/\"  //LOCAL DIRECTORY\n//def baseDir = \"/home/ec2-user/17_01_Kaggle_Sat/\"        //EC2 DIRECTORY \n\ndef getAllTif  (path:String) = {val d = new File(path); if (d.exists && d.isDirectory){ d.listFiles.filter(f => f.isFile && f.getName.endsWith(\".tif\")).map(f=>f).toList}else{List[File]()}}\ndef getSubDir  (path:String) = {val d = new File(path); if (d.exists && d.isDirectory){ d.listFiles.filter(_.isDirectory).map(_.getName).toList}else{List[String]()}}\ndef getGeoJsons(path:String) = {val d = new File(path); if (d.exists && d.isDirectory){ d.listFiles.filter(f => f.isFile && f.getName.endsWith(\".geojson\") && !f.getName.startsWith(\"Grid_\") ).map(_.getName).toList}else{List[String]()}}\n\n\ndef subDirs = getSubDir(baseDir+\"train_geojson_v3\")\nval gridExtent = scala.io.Source.fromFile(baseDir+\"/grid_sizes.csv\").getLines.filter(!_.startsWith(\",Xmax,Ymin\")).map(_.split(\",\") ).map(a=>(a(0), new Extent(xmin=0, a(2).toDouble, xmax=a(1).toDouble, ymax=0)  )).toMap\nval gridExtentB = sc.broadcast(gridExtent)\n\n//load all polygons into memory\nval geometries = subDirs.map{ subDir => \n    val subdirJsons = getGeoJsons(baseDir+\"/train_geojson_v3/\"+subDir)\n                      .map{ json => (json, JsonToClassType.getOrElse(json,-1)) }.toList\n                      .filter(_._2>0)\n                      .groupBy(_._2)\n                      .map{case(key,values) => (key,values.map(_._1))}  \n                             \n    val subdirJsonsWithRaw = subdirJsons + (0 -> List(\"\")) //add a fake class containing the entire image\n   \n    val subdirGeoms = subdirJsonsWithRaw.map{ case(classType, jsons) =>\n      if(classType==0){\n        (classType, Vector(gridExtent(subDir).toPolygon))\n      }else{\n        val geoms = jsons.map{ json => \n          val collection = GeoJson.fromFile[JsonFeatureCollection](baseDir+\"/train_geojson_v3/\"+subDir+\"/\"+json)\n          val polygons:Seq[Polygon] = collection.getAllPolygons ++ collection.getAllMultiPolygons.flatMap(_.polygons.toSeq)\n          polygons\n        }.reduce(_++_)        \n        (classType, geoms)\n      }\n    }                             \n                             \n    (subDir, subdirGeoms)                             \n}.toMap\nval geometriesB = sc.broadcast(geometries)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "0BF2F526E6C84486A796C0A38F55FC01"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Load alignement data  (OPTIONAL)\n\n- These alignements are used to align A,M, and, P bands with the R bands for every pictures\n- They are computed using findTransformECC function of the openCV library in an external (and time consumming job).\n- Realigning the picture is optional as the offset is generally relatively small\n- Alignment data are broadcasted"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "2FEA5BB7BD054D59898363A8819DACB0"
+    },
+    "cell_type" : "code",
+    "source" : "val alignement = scala.io.Source.fromFile(\"/home/loicus/Data/Code/17_01_Kaggle_Sat/ImageAlignment.csv\")\n                 .getLines\n                 .map{ line => \n                      val split = line.split(',')\n                      (split(0), (split(4).toFloat.toInt, split(7).toFloat.toInt ) )\n                 }.toMap\nval alignmentBC = sc.broadcast(alignement)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "4C3BBBA8957F4201A6CEBC02D039BCB0"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Define the list of training images"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "AEBF8A8CA7C1455D8D91A925CDD08EDB"
+    },
+    "cell_type" : "code",
+    "source" : "def trainingList = List(\"6010_1_2\", \"6010_4_2\", \"6010_4_4\", \"6040_1_0\", \"6040_1_3\", \"6040_2_2\", \"6040_4_4\", \"6060_2_3\", \"6070_2_3\", \"6090_2_0\", \"6100_1_3\", \"6100_2_2\", \"6100_2_3\", \n                        \"6110_1_2\", \"6110_3_1\", \"6110_4_0\", \"6120_2_0\", \"6120_2_2\", \"6140_1_2\", \"6140_3_1\", \"6150_2_3\", \"6160_2_1\", \"6170_0_4\", \"6170_2_4\", \"6170_4_1\")",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "004EB0DDE28843AA82E37C489F69CD4F"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Load the images into a spark RDD\n\n- Data are loaded either from local disk (left pannel) or HDFS (right pannel).\n- Note that geotrellis also provides several helper functions to load data from HDFS and other type of storage, but for this particular dataset we find it more convenient to use custom functions\n- Tiles are converted from 11 or 14 bits integer to Double type ranging between 0 to 1.\n- Produced RDD contains the image name and the 8+8+1+3 bands into a tuple-5 container"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "presentation" : {
+        "cell_width" : "6"
+      },
+      "id" : "EABD538317FD4034822A8E8F0289E5F1"
+    },
+    "cell_type" : "code",
+    "source" : "val filepaths = getAllTif(\"/home/loicus/Data/Code/17_01_Kaggle_Sat/sixteen_band\")\nval trainfilepaths = filepaths\n                   .filter{ p => p.getAbsolutePath().endsWith(\"_P.tif\") } //only keep P file name\n                   .map{ p => (p.getAbsolutePath().replaceAll(\"_[A,M,P].tif\",\"\"), p.getName().replaceAll(\"_[A,M,P].tif\",\"\")) }\n                   .filter{ case (path,subdir) => trainingList.contains(subdir)}                      \n\nval rddTrain:RDD[(String, MultibandTile,MultibandTile,MultibandTile,MultibandTile)] = sc.parallelize(trainfilepaths, trainfilepaths.length)\n  .map{ case (path,subdir) => \n    val tiffA = MultibandGeoTiff(path+\"_A.tif\")    \n    val tiffM = MultibandGeoTiff(path+\"_M.tif\")           \n    val tiffP = MultibandGeoTiff(path+\"_P.tif\")           \n    val tiffR = MultibandGeoTiff(path.replace(\"sixteen_band\", \"three_band\")+\".tif\")                  \n    val multibandtileA = tiffA.tile.convert(DoubleConstantNoDataCellType).mapDouble{ (b,p) => p/16384.0}\n    val multibandtileM = tiffM.tile.convert(DoubleConstantNoDataCellType).mapDouble{ (b,p) => p/2048.0}\n    val multibandtileP = tiffP.tile.convert(DoubleConstantNoDataCellType).mapDouble{ (b,p) => p/2048.0}     \n    val multibandtileR = tiffR.tile.convert(DoubleConstantNoDataCellType).mapDouble{ (b,p) => p/2048.0}            \n    (subdir, multibandtileA, multibandtileM, multibandtileP, multibandtileR)\n  }",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "presentation" : {
+        "cell_width" : "6"
+      },
+      "id" : "B5404E9921AE4442BFA68853DD519D4C"
+    },
+    "cell_type" : "code",
+    "source" : "/*\n//FOR A REASON THAT I DONT UNDERSTAND, IF I USE GEOTRELLIS TO BUILD THE RDD I HAVE LOTS OF FAILLURES LATER  (org.apache.spark.SparkException: Task not serializable)  EVEN IF I AM DOING STUPID THINGS\n//Serialization stack:\n//\t- object not serializable (class: org.apache.hadoop.mapred.JobConf, value: Configuration: core-default.xml, core-site.xml, mapred-default.xml, mapred-site.xml, yarn-default.xml, yarn-site.xml, hdfs-default.xml, hdfs-site.xml)\n//\t- field (class: $iw, name: readconf, type: class org.apache.hadoop.conf.Configuration)\n\n//def rootPath = new Path(\"hdfs://ec2-54-153-102-11.us-west-1.compute.amazonaws.com:9010/17_01_Kaggle_Sat/sixteen_band/\")\ndef rootPath = new Path(\"hdfs:///17_01_Kaggle_Sat/sixteen_band/\")\ndef filesToRead = trainingList.flatMap(name => List(name+\"_A.tif\", name+\"_M.tif\", name+\"_P.tif\") ).toSeq  //prefilter on training files only\ndef readconf = sparkContext.hadoopConfiguration.withInputDirectory(rootPath, filesToRead)\n\nval rddTrain:RDD[(String, ProjectedExtent, MultibandTile)] =\n   sparkContext.newAPIHadoopRDD( readconf, classOf[BytesFileInputFormat],  classOf[Path], classOf[Array[Byte]] )\n  .filter{ case (path, bytes) => trainingList.contains(path.getName().replaceAll(\"_[A,M,P].tif\",\"\"))}\n  .mapPartitions( _.map{ case (path, bytes) => \n    val tileName = path.getName().replace(\".tif\",\"\")\n    val (projExtent,multibandtile) = RasterReader.multibandGeoTiffReader.readFully(ByteBuffer.wrap(bytes), HadoopGeoTiffRDD.Options())\n    val modmultibandtile = multibandtile.convert(DoubleConstantNoDataCellType).mapDouble{ (b,p) => if(tileName.endsWith(\"_A\")){p/16384.0}else{p/2048.0}} //convert Int (11 or 14bits) tiles to Double between 0 and 1.\n    (tileName, projExtent, modmultibandtile)\n  },preservesPartitioning = true)\n  .setName(\"TrainingSet\")\n  .cache()\nrddTrain.count() //cache the dataset\n*/",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "2FC01D0EE9854C388DA3E6760BEF82CA"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Resizing / Aligning A,M,P bands\n\n- Tiles are resized to R bands dimensions\n- Tiles are aligned to R bands pictures  (OPTIONAL)"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "1B93DB5CA12E4D79BDB24221615ABBC3"
+    },
+    "cell_type" : "code",
+    "source" : "val rddTrainAdapted = rddTrain\n  .map{case(subdir,mbtA, mbtM, mbtP, mbtR) => \n    val mbtAscaled = mbtA.resample(new Extent(0,0,mbtA.cols, mbtA.rows), mbtR.cols, mbtR.rows, Bilinear).mapBands( (i,tile) => translateTile(tile, alignmentBC.value(subdir+\"_A\") )  )\n    val mbtMscaled = mbtM.resample(new Extent(0,0,mbtM.cols, mbtM.rows), mbtR.cols, mbtR.rows, Bilinear).mapBands( (i,tile) => translateTile(tile, alignmentBC.value(subdir+\"_M\") )  )\n    val mbtPscaled = mbtP.resample(new Extent(0,0,mbtP.cols, mbtP.rows), mbtR.cols, mbtR.rows, Bilinear).mapBands( (i,tile) => translateTile(tile, alignmentBC.value(subdir+\"_P\") )  )           \n    (subdir, mbtAscaled, mbtMscaled, mbtPscaled, mbtR)\n  }",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "9E215CC7017640D88E21336F67177D7A"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Adding a 10-bands multibandtile with object class type information\n\nWe create a mask per object class type and geometry\n\nFor each picture,\n- rasterize the geometry (per object class type)\n- add a 10 bands (one per object class) multiband tile to the RDD\n- there is actually one extra band that is the raw image (the mask that let pass all the image pixels)\n- tile pixel value is 1 if the object of a class type is present or 0 of the object is not present\n"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "5A5AB818F3174B00821CF14D614FA769"
+    },
+    "cell_type" : "code",
+    "source" : "val rddTrainWithType = rddTrainAdapted\n  .map{case(subdir,mbtA, mbtM, mbtP, mbtR) => \n    val rasterExt = RasterExtent(gridExtentB.value(subdir), mbtR.bands(0).cols, mbtR.bands(0).rows)\n      \n    val maskArray =  ClassTypeToName.keys.toList.sortWith(_<_) //make sure the ordering is ok\n      .map{ classType =>        \n        val array:Array[Byte] = Array.ofDim[Byte](rasterExt.cols * rasterExt.rows).fill(byteNODATA)\n        val cols = rasterExt.cols                                                     \n\n        val geoms:Seq[Polygon] = geometriesB.value(subdir).getOrElse(classType, Seq[Polygon]())\n           \n        geoms.foreach{ geom => \n          try {       //needed to skip exception from https://github.com/locationtech/geotrellis/issues/1962\n            PolygonRasterizer.foreachCellByPolygon(geom, rasterExt, Rasterizer.Options.DEFAULT){(col: Int, row: Int) => array(row * cols + col) = 1.toByte }\n          }catch{ case e: Exception => { } } //skip this polygon\n        }\n        ByteConstantNoDataArrayTile(array, rasterExt.cols, rasterExt.rows)\n    }\n    .toArray\n    val mbtT = ArrayMultibandTile(maskArray)       \n    (subdir,mbtA, mbtM, mbtP, mbtR, mbtT)    \n  }\n  .setName(\"TrainingSet\")",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "C78050395121485D90EB3FE31D2A8EFA"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Visualization availble training data \n\n- we create a rdd containing down sized version of the RGB bands for all pictures in the training dataset\n- We display the 25 images using the TileDisplayer widget we defined earlier."
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "id" : "7ABADCBB416F443B8A341BA7B7673AF7"
+    },
+    "cell_type" : "code",
+    "source" : "val previews = rddTrainWithType\n               .map{case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) => (mbtR.subsetBands(Seq(0,1,2)).resample(new Extent(0,0,mbtR.cols, mbtR.rows), mbtR.cols/32, mbtR.rows/32, Average), subdir) } //reduce size for display\n               .collect().toList.sortWith(_._2<_._2)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "id" : "C8436148FB10430483DC4F87B93CC4BE"
+    },
+    "cell_type" : "code",
+    "source" : "TileDisplayer.draw( previews, nCols=10, imgWidth=200, isRGB=true)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "860054F8ABE94ADC8246C7FDADCC9DCB"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Choosing a benchmark picture\n\n- We choose a benchmark picture among the 25 images of the training set\n- We display the picture in each of the 8+8+1+3 available bands \n- We can observe that each band contains a different type of information (corresponding to thee spectral image)"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "id" : "48A3BEE0B9BF4CD4990FA9BFA587B666"
+    },
+    "cell_type" : "code",
+    "source" : "def BenchmarkSubDir = \"6120_2_2\" //pickup one particular picture to visualize",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "9D1313615C5A4F8388C2E2C2D9DE625C"
+    },
+    "cell_type" : "code",
+    "source" : "val benchmarkSpectralSet = rddTrainWithType\n               .filter{case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) => subdir.startsWith(BenchmarkSubDir)}\n               .flatMap{case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) => List( (mbtA.resample(new Extent(0,0,mbtA.cols, mbtA.rows), mbtA.cols/16, mbtA.rows/16, Average), \"A\"),\n                                                                           (mbtM.resample(new Extent(0,0,mbtM.cols, mbtM.rows), mbtM.cols/16, mbtM.rows/16, Average), \"M\"),\n                                                                           (mbtP.resample(new Extent(0,0,mbtP.cols, mbtP.rows), mbtP.cols/16, mbtP.rows/16, Average), \"P\"),\n                                                                           (mbtR.resample(new Extent(0,0,mbtR.cols, mbtR.rows), mbtR.cols/16, mbtR.rows/16, Average), \"R\") ) }\n               .collect().toList.sortWith(_._2<_._2)\n",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "id" : "48656BBB3EE846518469BE42A47AE644"
+    },
+    "cell_type" : "code",
+    "source" : "TileDisplayer.draw( benchmarkSpectralSet, nCols=10, imgWidth=200)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "3C866EFCE0A84DFD8DD4268B7707496A"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Display the object class mask for the 1+10 categories on the image"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "F844BAE91B144A539DB9B4E7ABDC46D2"
+    },
+    "cell_type" : "code",
+    "source" : "val typeTileSetForDisplay = rddTrainWithType\n  .filter{case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) => subdir.startsWith(BenchmarkSubDir)}\n  .flatMap{case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) => mbtT.resample(new Extent(0,0,mbtT.cols, mbtT.rows), mbtT.cols/16, mbtT.rows/16, Average).bands.zipWithIndex.map{ case (tile,index) => (tile, \" \"+ClassTypeToName(index)) }.toList }\n  .collect().toList.sortWith(_._2<_._2)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "id" : "BE7589B2307F472AB408B1484BC03685"
+    },
+    "cell_type" : "code",
+    "source" : "TileDisplayer.draw( typeTileSetForDisplay, nCols=6, imgWidth=200, isRGB=true)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "C7571C793FD649568360FD0D80AF3B7F"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Overlay the object geometry on the RGB image\n- We zoom on a corner of the image to better see the details\n- object of each class are shown in blue"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "2AE92AD4EFE6473C8D9E00156E3D2031"
+    },
+    "cell_type" : "code",
+    "source" : "\n//zoom on a small part of the image to see better\n\nval benchmarkTagSet = rddTrainWithType\n  .filter{case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) => subdir.startsWith(BenchmarkSubDir)}\n  .flatMap{case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) =>     \n     mbtT.crop(200,300,900,1200).bands.zipWithIndex\n       .map{ case(tagtile,classType) =>\n          val RGBcopy = mbtR.subsetBands(Seq(0,1,2)).crop(200,300,900,1200).mapBands( (b,t) => t.mutable.copy.mutable) //this is need to make a real copy of the tiles, otherwise it is always the same memory array                                                        \n          if(classType>0)tagtile.foreach{ (col, row, value) => if(value==1){RGBcopy.band(2).mutable.set(col, row, 1)}}\n          (ClassTypeToName(classType),  RGBcopy) //swap image and caption otherwise everything is aggregated to a single multiArray (I don't get why)           \n       }.toList\n   }\n  .map(a=>(a._2,a._1)) //swap back image and caption\n  .collect().toList.sortWith(_._2<_._2)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "A287A65807F9466E80F2A19877EFDED9"
+    },
+    "cell_type" : "code",
+    "source" : "TileDisplayer.draw( benchmarkTagSet, nCols=6, imgWidth=200, isRGB=true)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "B2A6FAACB6AE4C06B471444B6C85ECC1"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Create object class type histograms for each spectral bands in the training dataset\n- we define a helper function saving histograms in the form of a mutable map\n- we create a class type to visualize the histograms as Spark-Notebook widgets\n- we process all training data"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "id" : "F45D1EA4C66C4B4F87E0F943F02D8E4B"
+    },
+    "cell_type" : "code",
+    "source" : "case class histoForWidget(value:Double, pdf:Double, group:String)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "id" : "F6AFD81AC6894B2A803F20F9054EB398"
+    },
+    "cell_type" : "code",
+    "source" : "def getHistogramFromMask(tile:Tile, geoms:Seq[Polygon], rasterExt:RasterExtent, nBins:Int=100, debug:String ):Map[Double,Long] = { \n  val min     = 0.0\n  val max     = 1.0  \n  val width   = (max-min)/nBins\n  val histo   = scala.collection.mutable.Map[Double, Long]()\n  for(bin<-0 until nBins){histo.update((bin*width).toDouble, 0.toLong) }\n\n\n  geoms.foreach{ geom => \n    try {       //needed to skip exception from https://github.com/locationtech/geotrellis/issues/1962\n      PolygonRasterizer.foreachCellByPolygon(geom, rasterExt, Rasterizer.Options.DEFAULT){(col: Int, row: Int) => \n        val pix = tile.getDouble(col,row)\n        val bin = (pix/width).toInt\n        histo.update((bin*width).toDouble, histo.getOrElse((bin*width).toDouble, 0.toLong)+1.toLong)\n      }\n    }catch{ case e: Exception => {  } } //skip this polygon \n  }     \n  histo.toMap //makes it immutable\n}",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "presentation" : {
+        "tabs_state" : "{\n  \"tab_id\": \"#tab135725647-0\"\n}",
+        "pivot_chart_state" : "{\n  \"hiddenAttributes\": [],\n  \"menuLimit\": 200,\n  \"cols\": [],\n  \"rows\": [],\n  \"vals\": [],\n  \"exclusions\": {},\n  \"inclusions\": {},\n  \"unusedAttrsVertical\": 85,\n  \"autoSortUnusedAttrs\": false,\n  \"inclusionsInfo\": {},\n  \"aggregatorName\": \"Count\",\n  \"rendererName\": \"Table\"\n}"
+      },
+      "id" : "5BA1A5CC66EF404185EA658BFB11C069"
+    },
+    "cell_type" : "code",
+    "source" : "val histogramSet = rddTrainWithType\n  .flatMap{ case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) =>\n    geometriesB.value(subdir).flatMap{ case(classType, geoms) =>        \n      \n      val Ahisto =                         \n      for(i <- 0 until mbtA.bands.length) yield {            \n        val rasterExt = RasterExtent(gridExtentB.value(subdir), mbtA.bands(i).cols, mbtA.bands(i).rows)                         \n        val spectralBand = \"A\"+\" band \"+i   \n        val histo = getHistogramFromMask(mbtA.band(i), geoms, rasterExt, nBins=200, subdir+spectralBand+\" classType:\"+classType)                                                  \n        ((spectralBand, ClassTypeToName(classType)), histo)\n      }     \n                                      \n      val Mhisto =                         \n      for(i <- 0 until mbtM.bands.length) yield {            \n        val rasterExt = RasterExtent(gridExtentB.value(subdir), mbtM.bands(i).cols, mbtM.bands(i).rows)                         \n        val spectralBand = \"M\"+\" band \"+i   \n        val histo = getHistogramFromMask(mbtM.band(i), geoms, rasterExt, nBins=200, subdir+spectralBand+\" classType:\"+classType)                                                  \n        ((spectralBand, ClassTypeToName(classType)), histo)\n      }                                           \n                                      \n      val Phisto =                         \n      for(i <- 0 until mbtP.bands.length) yield {            \n        val rasterExt = RasterExtent(gridExtentB.value(subdir), mbtP.bands(i).cols, mbtP.bands(i).rows)                         \n        val spectralBand = \"P\"+\" band \"+i   \n        val histo = getHistogramFromMask(mbtP.band(i), geoms, rasterExt, nBins=200, subdir+spectralBand+\" classType:\"+classType)                                                  \n        ((spectralBand, ClassTypeToName(classType)), histo)\n      }  \n                                      \n      val Rhisto =                         \n      for(i <- 0 until mbtR.bands.length) yield {            \n        val rasterExt = RasterExtent(gridExtentB.value(subdir), mbtR.bands(i).cols, mbtR.bands(i).rows)                         \n        val spectralBand = \"R\"+\" band \"+i   \n        val histo = getHistogramFromMask(mbtR.band(i), geoms, rasterExt, nBins=200, subdir+spectralBand+\" classType:\"+classType)                                                  \n        ((spectralBand, ClassTypeToName(classType)), histo)\n      }                                        \n\n      Ahisto++Mhisto++Phisto++Rhisto\n                                      \n    }     \n  }\n  .reduceByKey{ (map1,map2) => map1 ++ map2.map{ case (k,v) => k -> (v + map1.getOrElse(k,0.toLong)) } } //merge two histograms\n  .map{ case(key,histo) => \n       val sum = 0.01*math.max(1, histo.values.sum)\n       val minTreshold = 0.5 //in %\n       val normHisto   = histo.mapValues(_/sum)\n       val histoMinArg = normHisto.filter(_._2>minTreshold).map(_._1).min\n       val histoMaxArg = normHisto.filter(_._2>minTreshold).map(_._1).max       \n       val cropHisto   = normHisto.filter(kv => kv._1>histoMinArg && kv._1<histoMaxArg)  //remove zero null entries\n       (key._1, cropHisto.map{ case (k,v) => histoForWidget( k, v, key._2 ) }.toArray )        \n  }\n  .reduceByKey( (a,b) => (a++b).sortWith(_.group<_.group)) //order by classType     \n  .collect ",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "8D63B095DB93412F81A1F14991539D2F"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Displaying spectral histograms\n - Histogram are ordered by A bands, M bands, P band and R bands\n - We can see that certain objects (water and crop for instance) are peaking in some spectral bands\n - This is used to identify the object class type of a pixel based on spectral information "
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "presentation" : {
+        "tabs_state" : "{\n  \"tab_id\": \"#tab239991601-0\"\n}",
+        "pivot_chart_state" : "{\n  \"hiddenAttributes\": [],\n  \"menuLimit\": 200,\n  \"cols\": [],\n  \"rows\": [],\n  \"vals\": [],\n  \"exclusions\": {},\n  \"inclusions\": {},\n  \"unusedAttrsVertical\": 85,\n  \"autoSortUnusedAttrs\": false,\n  \"inclusionsInfo\": {},\n  \"aggregatorName\": \"Count Unique Values\",\n  \"rendererName\": \"Table Barchart\"\n}"
+      },
+      "id" : "7FB64F52D1664C6282368EFFCDD5265D"
+    },
+    "cell_type" : "code",
+    "source" : "containerFluid(\n  List( histogramSet.map(_._2).map( h=>  (LineChart(h, fields=Some(\"value\",\"pdf\"), groupField=Some(\"group\"), maxPoints=1000) ,3)  ).toList)  \n)",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "325FD016E9BE4233BA4F176E42F298E6"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Building a per pixel training dataset\n- we create a case class which contains per pixel information about the object class type of a given pixel as well as the pixel intensity in each of the 20 spectral bands\n- we count the number of pixels of every given class type\n- we create a dataset with all the per pixel information --> this will be used to train machine learning algorithm\n   - this dataset contains at most 200K pixels of a given type in order to limit unballance in pixel number between all classes"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "E02F8B7092F046D1B362FED893B2EBF7"
+    },
+    "cell_type" : "code",
+    "source" : "case class PixelType (Type:Int,  R0:Double, R1:Double, R2:Double, P0:Double, \n                      M0:Double, M1:Double, M2:Double, M3:Double, M4:Double, M5:Double, M6:Double, M7:Double,\n                      A0:Double, A1:Double, A2:Double, A3:Double, A4:Double, A5:Double, A6:Double, A7:Double                    \n                      ) ",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "output_stream_collapsed" : true,
+      "collapsed" : true,
+      "presentation" : {
+        "tabs_state" : "{\n  \"tab_id\": \"#tab647671875-0\"\n}",
+        "pivot_chart_state" : "{\n  \"hiddenAttributes\": [],\n  \"menuLimit\": 200,\n  \"cols\": [],\n  \"rows\": [],\n  \"vals\": [],\n  \"exclusions\": {},\n  \"inclusions\": {},\n  \"unusedAttrsVertical\": 85,\n  \"autoSortUnusedAttrs\": false,\n  \"inclusionsInfo\": {},\n  \"aggregatorName\": \"Count\",\n  \"rendererName\": \"Table\"\n}"
+      },
+      "id" : "F5674793BE4E4C0F902ADDA1596AB079"
+    },
+    "cell_type" : "code",
+    "source" : "//Count the number of pixels of each class type\nval classCounts = rddTrainWithType\n  .map{ case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) =>\n    val Ccounts = scala.collection.mutable.Map[Short, Long]()\n    for(classtype<-0 to 10){Ccounts.update(classtype.toShort, 0.toLong) }\n    mbtT.foreach{ (classtype, value) => if(value==1){ Ccounts.update(classtype.toShort, Ccounts.getOrElse(classtype.toShort, 0.toLong)+1.toLong)  } }\n    Ccounts\n  }\n  .reduce{(map1,map2) => map1 ++ map2.map{ case (k,v) => k -> (v + map1.getOrElse(k,0.toLong)) } } //merge the maps\n  .toList\n\nclassCounts",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "97192950E9F94287ACD959F4F66AD185"
+    },
+    "cell_type" : "code",
+    "source" : "def getPixelDataForClassTraining(rdd:RDD[(String,MultibandTile,MultibandTile,MultibandTile,MultibandTile,ArrayMultibandTile)], positiveClassType:Short):RDD[PixelType] = {   \n  rdd\n  .flatMap{ case(subdir,mbtA, mbtM, mbtP, mbtR, mbtT) =>\n    val ArasterExt = RasterExtent(gridExtentB.value(subdir), mbtA.cols, mbtA.rows)                                \n    val MrasterExt = RasterExtent(gridExtentB.value(subdir), mbtM.cols, mbtM.rows)                                \n    val PrasterExt = RasterExtent(gridExtentB.value(subdir), mbtP.cols, mbtP.rows)                                       \n    val RrasterExt = RasterExtent(gridExtentB.value(subdir), mbtR.cols, mbtR.rows)\n    val TrasterExt = RasterExtent(gridExtentB.value(subdir), mbtT.cols, mbtT.rows)                                                  \n    \n    val count    = classCounts.toMap.getOrElse(positiveClassType,0.toLong)\n    val maxCount = math.min(count, 200000)\n    val positiveSamplingRate = math.max(1, count / maxCount).toInt\n    val negativeSamplingRate = math.max(1, (classCounts.toMap.getOrElse(0,0.toLong) / maxCount)).toInt\n            \n    val data = scala.collection.mutable.ListBuffer[PixelType]()        \n    mbtT.bands(positiveClassType).foreach{ (col, row, value) => \n      if( (value==1 && scala.util.Random.nextInt(positiveSamplingRate)==0) || (value!=1 && scala.util.Random.nextInt(negativeSamplingRate)==0) ){\n        val XYcoords = TrasterExt.gridToMap(col, row)\n        val Acolrow = ArasterExt.mapToGrid(XYcoords._1, XYcoords._2)                           \n        val Mcolrow = MrasterExt.mapToGrid(XYcoords._1, XYcoords._2)\n        val Pcolrow = PrasterExt.mapToGrid(XYcoords._1, XYcoords._2)\n        val Rcolrow = RrasterExt.mapToGrid(XYcoords._1, XYcoords._2)\n        data += PixelType( \n           if(value==1){1}else{0},\n           mbtR.band(0).getDouble(Rcolrow._1,Rcolrow._2),\n           mbtR.band(1).getDouble(Rcolrow._1,Rcolrow._2),\n           mbtR.band(2).getDouble(Rcolrow._1,Rcolrow._2),          \n           mbtP.band(0).getDouble(Pcolrow._1,Pcolrow._2),          \n           mbtM.band(0).getDouble(Mcolrow._1,Mcolrow._2),\n           mbtM.band(1).getDouble(Mcolrow._1,Mcolrow._2),\n           mbtM.band(2).getDouble(Mcolrow._1,Mcolrow._2),\n           mbtM.band(3).getDouble(Mcolrow._1,Mcolrow._2),\n           mbtM.band(4).getDouble(Mcolrow._1,Mcolrow._2),\n           mbtM.band(5).getDouble(Mcolrow._1,Mcolrow._2),\n           mbtM.band(6).getDouble(Mcolrow._1,Mcolrow._2),\n           mbtM.band(7).getDouble(Mcolrow._1,Mcolrow._2),           \n           mbtA.band(0).getDouble(Acolrow._1,Acolrow._2),\n           mbtA.band(1).getDouble(Acolrow._1,Acolrow._2),\n           mbtA.band(2).getDouble(Acolrow._1,Acolrow._2),\n           mbtA.band(3).getDouble(Acolrow._1,Acolrow._2),\n           mbtA.band(4).getDouble(Acolrow._1,Acolrow._2),\n           mbtA.band(5).getDouble(Acolrow._1,Acolrow._2),\n           mbtA.band(6).getDouble(Acolrow._1,Acolrow._2),\n           mbtA.band(7).getDouble(Acolrow._1,Acolrow._2)                               \n        )   \n      }\n    }\n    data\n  }\n  .setName(\"PixelTrainingData\")\n}",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "A2D5AD70DEED4130860834BC60999BA8"
+    },
+    "cell_type" : "markdown",
+    "source" : "## Using H2O machine learning to predict object types from pixel-based spectral information\n\n - We Load H2O Sparkling-water library\n - We intialize an H2O context"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "19A8DC63CDE44CB4BEF8324D9C8A665A"
+    },
+    "cell_type" : "code",
+    "source" : "//only for H2O model fitting:\nimport org.apache.spark.SparkFiles\nimport org.apache.spark.h2o._\nimport org.apache.spark.sql.{DataFrame, SQLContext, Row}\nimport water.Key\nimport water.support.SparkContextSupport.addFiles\nimport water.support.H2OFrameSupport._\nimport water.support.H2OFrameSupport\n\nval h2oContext = H2OContext.getOrCreate(sparkSession.sparkContext)\nimport h2oContext._\nimport h2oContext.implicits._",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "96D40426F87A4ED3A7258DF00EA95625"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Helper functions to train a Grandient Boosted Machine (GBM)\n - We define an helper functions to train an MLP for pixel classification\n - A one a one-vs-all classification strategy is used here.  Note that better technique than this could be used, but they are more complex to implement.\n - The trained model is saved in the form of a MOJO file, which allows to easilly share/use the model for predicting results (without the need to reload an H2O context)"
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "95BB4D3FEACD47688F4004FCBEE5871F"
+    },
+    "cell_type" : "code",
+    "source" : "import _root_.hex.tree.gbm.GBM\nimport _root_.hex.tree.gbm.GBMModel.GBMParameters\nimport _root_.hex.genmodel.utils.DistributionFamily\nimport _root_.hex.{Model, ModelMetricsBinomial}\nimport water.support.ModelSerializationSupport\nimport water.support.ModelMetricsSupport\nimport _root_.hex.ModelMetricsBinomial\n\ndef trainModelWithGBM(rdd:RDD[PixelType], className:String=\"className\")= {\n\n  val Array(train,valid) = rdd.randomSplit(Array(0.9,0.1))\n  val h2otrain:H2OFrame  = h2oContext.asH2OFrame(train, \"h2otrain\")\n  val h2ovalid:H2OFrame  = h2oContext.asH2OFrame(valid, \"h2ovalid\")  \n  // Transform target column into a categorical vector  \n  h2otrain.replace(h2otrain.find(\"Type\"), h2otrain.vec(\"Type\").toCategoricalVec).remove()  \n  h2ovalid.replace(h2ovalid.find(\"Type\"), h2ovalid.vec(\"Type\").toCategoricalVec).remove() \n\n  val gbmParams = new GBMParameters()\n  gbmParams._train = h2otrain\n  gbmParams._valid = h2ovalid\n  gbmParams._response_column = \"Type\"\n  gbmParams._ntrees = 100//25\n  gbmParams._max_depth = 15//13\n  gbmParams._distribution = DistributionFamily.bernoulli\n  gbmParams._balance_classes = true\n\n  val gbm = new GBM(gbmParams, Key.make(\"gbmModel_%s.hex\".format(className.replaceAll(\" \",\"_\"))))\n  val gbmModel = gbm.trainModel.get\n    \n  ModelSerializationSupport.exportH2OModel(gbmModel, URI.create(\"file:///home/loicus/Data/Code/17_01_Kaggle_Sat/SNBNew/h2ogbmmodel_%s.hex\".format(className.replaceAll(\" \",\"_\") ) ) )\n  //ModelSerializationSupport.exportPOJOModel(gbmModel, URI.create(\"file:///tmp/h2ogbmmodel_%s.pojo\".format(className.replaceAll(\" \",\"_\") ) ) )\n  gbmModel.getMojo().writeTo(new FileOutputStream(\"/home/loicus/Data/Code/17_01_Kaggle_Sat/SNBNew/h2ogbmmodel_%s.mojo\".format(className.replaceAll(\" \",\"_\"))))\n  \n  \n  val valMetrics = ModelMetricsSupport.modelMetrics[ModelMetricsBinomial](gbmModel, h2ovalid)  \n  \n  h2otrain.delete()\n  h2ovalid.delete()\n  \n  (gbmModel, valMetrics)\n}",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "97E6781DF6BF4A2F8CD76C68B8BD1B26"
+    },
+    "cell_type" : "markdown",
+    "source" : "### Model training\n- We run the model training for each object class type\n- We display the model Area Under Curve (AUC) performance for each class."
+  }, {
+    "metadata" : {
+      "trusted" : true,
+      "input_collapsed" : false,
+      "collapsed" : true,
+      "id" : "03F47D8258E44B5987AB138194F88348"
+    },
+    "cell_type" : "code",
+    "source" : "for(classType<-1 to 10){\n    val sample = getPixelDataForClassTraining(rddTrainWithType,classType.toShort)\n    val (gbmmodel, gbmmetric) = trainModelWithGBM(sample, ClassTypeToName(classType) )\n  println(\"%30s lead to  %f (GBM) AUC\".format(ClassTypeToName(classType), gbmmetric.auc))\n}",
+    "outputs" : [ ]
+  }, {
+    "metadata" : {
+      "id" : "58A8784BA0D3451B90F9ADA422F144BF"
+    },
+    "cell_type" : "markdown",
+    "source" : "### All done"
+  } ],
+  "nbformat" : 4
+}
